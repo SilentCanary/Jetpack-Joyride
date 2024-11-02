@@ -4,6 +4,150 @@
 using namespace std;
 using namespace sf;
 
+enum Game_state
+{
+    NAME_INPUT,
+    MENU,
+    PLAY
+};
+
+class Menu
+{
+    Sprite background;
+    Texture background_texture;
+
+    RectangleShape text_box;
+    bool is_active;
+    string name;
+    Font font;
+    Text text;
+    Text title_text;
+
+    CircleShape go_button;
+    ConvexShape arrow;
+
+    void init_go_button()
+    {
+        go_button.setRadius(20.f);
+        go_button.setFillColor(Color(25, 25, 25, 200));
+        go_button.setOutlineColor(Color::White);
+        go_button.setOutlineThickness(2.f);
+        go_button.setOrigin(20.f, 20.f);
+        go_button.setPosition(400.f, 400.f);
+        arrow.setPointCount(3);
+        arrow.setFillColor(Color::White);
+        arrow.setOutlineColor(Color::Black);
+        arrow.setPoint(0, Vector2f(0, -25));
+        arrow.setPoint(1, Vector2f(12.5, 0));
+        arrow.setPoint(2, Vector2f(-12.5, 0));
+        arrow.setRotation(90);
+        arrow.setOrigin(0, -25); // Set origin to top-center of the triangle
+        arrow.setPosition(go_button.getPosition().x + 15.f, go_button.getPosition().y);
+    }
+
+    void init_text_box()
+    {
+        this->text_box.setSize(Vector2f(300.f, 50.f));
+        this->text_box.setFillColor(Color(25, 25, 25, 200));
+        this->text_box.setOutlineColor(Color::White);
+        this->text_box.setOutlineThickness(1.f);
+        this->text_box.setPosition(250.f, 300.f);
+
+        this->text.setFont(font);
+        this->text.setCharacterSize(20);
+        this->text.setFillColor(Color::White);
+        this->text.setPosition(260.f, 310.f);
+        is_active = false;
+    }
+    void init_gui()
+    {
+        this->background_texture.loadFromFile("C:/Users/sairam/Documents/data structures/graph/Texture/last.jpg");
+        this->background.setTexture(this->background_texture);
+        this->font.loadFromFile("ARCADE.ttf");
+        this->title_text.setFont(this->font);
+        this->title_text.setCharacterSize(50);
+        this->title_text.setFillColor(Color::White);
+        this->title_text.setPosition(200.f, 200.f);
+    }
+
+public:
+    Menu()
+    {
+        this->init_gui();
+        this->init_go_button();
+        this->init_text_box();
+    }
+
+    void handle_event(Event ev, RenderWindow &window)
+    {
+        if (ev.type == Event::MouseButtonPressed)
+        {
+            if (text_box.getGlobalBounds().contains(static_cast<Vector2f>(Mouse::getPosition(window))))
+            {
+                is_active = true;
+                cout << "TEXT BOX ACTIVE" << endl;
+            }
+            else
+            {
+                is_active = false;
+                cout << "TEXT BOX INACTIVE" << endl;
+            }
+        }
+        else if (ev.type == Event::TextEntered && is_active)
+        {
+            if (ev.text.unicode == '\b' && !name.empty())
+            {
+                name.pop_back(); // Handle backspace to delete characters
+            }
+            else if (ev.text.unicode < 128 && ev.text.unicode != '\b')
+            {
+                name += static_cast<char>(ev.text.unicode); // Append character to name
+            }
+            text.setString(name); // Update text display
+        }
+    }
+
+    bool is_Mouse_hover(RenderWindow &window)
+    {
+        Vector2i mouse_pos = Mouse::getPosition(window);
+        FloatRect getbounds = go_button.getGlobalBounds();
+        return getbounds.contains(static_cast<Vector2f>(mouse_pos));
+    }
+
+    void update_color(RenderWindow &window)
+    {
+        if (is_Mouse_hover(window))
+        {
+            go_button.setFillColor(Color(50, 50, 50, 200));
+        }
+        else
+        {
+            go_button.setFillColor(Color(25, 25, 25, 200));
+        }
+    }
+
+    void render_input_screen(RenderWindow &window)
+    {
+        window.draw(this->background);
+        this->title_text.setString("SPACE INVADERS");
+        window.draw(this->title_text);
+        window.draw(this->text_box);
+        window.draw(this->text);
+        update_color(window);
+        window.draw(this->go_button);
+        window.draw(this->arrow);
+    }
+    void render_welcome_screeen(RenderWindow &window)
+    {
+        window.draw(this->background);
+        this->title_text.setString("WELCOME " + name);
+        update_color(window);
+        window.draw(this->title_text);
+        window.draw(this->go_button);
+        window.draw(this->arrow);
+    }
+};
+
 class Quad_Tree
 {
     int max_objects;
@@ -420,6 +564,9 @@ class Game
 
     Coin *removed_coin;
 
+    Menu *menu;
+    Game_state state;
+
 public:
     Game()
     {
@@ -427,7 +574,9 @@ public:
         this->world = new main_world(window->getSize(), 200.f);
         this->player = new PLayer();
         this->quad_tree = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
-        this->removed_coin=nullptr;
+        this->removed_coin = nullptr;
+        this->menu = new Menu();
+        this->state = NAME_INPUT;
         coins.push_back(Coin({200.f, 10.f}, 120.f));  // Coin in the upper line
         coins.push_back(Coin({250.f, 10.f}, 120.f));  // Coin in the upper line
         coins.push_back(Coin({300.f, 10.f}, 120.f));  // Coin in the upper line
@@ -446,6 +595,7 @@ public:
 
     void poll_events()
     {
+
         while (window->pollEvent(ev))
         {
             if (ev.type == Event::Closed)
@@ -456,75 +606,103 @@ public:
             {
                 window->close();
             }
+            switch (state)
+            {
+            case NAME_INPUT:
+                this->menu->handle_event(ev, *window);
+                if (ev.type == Event::MouseButtonPressed && this->ev.mouseButton.button == Mouse::Left)
+                {
+                    if (this->menu->is_Mouse_hover(*window))
+                    {
+                        this->state=MENU;
+                    }
+                }
+
+                break;
+            case MENU:
+                if (ev.type == Event::MouseButtonPressed && this->ev.mouseButton.button == Mouse::Left)
+                {
+                    if (this->menu->is_Mouse_hover(*window))
+                    {
+                        this->state=PLAY;
+                    }
+                }
+                break;
+            default:
+                break;
+            }
         }
     }
 
     void update(float delta_time)
     {
-        quad_tree->clear();
-        for (auto &coin : coins)
+        if (state == PLAY)
         {
-            quad_tree->insert(coin.getSprite());
-        }
-        vector<Sprite> possible_collisions;
-        // Coin *removed_coin = nullptr;
-        quad_tree->retrieve(possible_collisions, player->getSprite().getGlobalBounds());
-        for (auto it = possible_collisions.begin(); it != possible_collisions.end(); it++)
-        {
-            if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
+            quad_tree->clear();
+            for (auto &coin : coins)
             {
-                points += 10;
-                removed_coin = new Coin(it->getPosition(), 120.f);
-                auto coin_it = std::find_if(coins.begin(), coins.end(),
-                                            [&](Coin &coin)
-                                            { return coin.getSprite().getPosition() == it->getPosition(); });
-                if (coin_it != coins.end())
-                {
-                    removed_coin = new Coin(coin_it->getSprite().getPosition(), 120.f);
-                    coins.erase(coin_it); // Remove it from the main vector
-                }
-                break;
+                quad_tree->insert(coin.getSprite());
             }
+            vector<Sprite> possible_collisions;
+            // Coin *removed_coin = nullptr;
+            quad_tree->retrieve(possible_collisions, player->getSprite().getGlobalBounds());
+            for (auto it = possible_collisions.begin(); it != possible_collisions.end(); it++)
+            {
+                if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
+                {
+                    points += 10;
+                    removed_coin = new Coin(it->getPosition(), 120.f);
+                    auto coin_it = std::find_if(coins.begin(), coins.end(),
+                                                [&](Coin &coin)
+                                                { return coin.getSprite().getPosition() == it->getPosition(); });
+                    if (coin_it != coins.end())
+                    {
+                        removed_coin = new Coin(coin_it->getSprite().getPosition(), 120.f);
+                        coins.erase(coin_it); // Remove it from the main vector
+                    }
+                    break;
+                }
+            }
+
+            // for (int i = 0; i < possible_collisions.size();)
+            // {
+            //     bool coin_removed=false;
+            //     for (auto it = coins.begin(); it !=coins.end(); it++)
+            //     {
+            //         if (player->getSprite().getGlobalBounds().intersects(it->getSprite().getGlobalBounds()))
+            //         {
+            //             points+=10;
+            //             removed_coin=new Coin(it->getSprite().getPosition(),120.f);
+            //             coins.erase(it);
+            //             coin_removed=true;
+            //             break;
+            //         }
+
+            //     }
+            //     if (!coin_removed)
+            //     {
+            //         i++;
+            //     }
+
+            // }
+
+            bool player_is_running = Keyboard::isKeyPressed(Keyboard::Left) || Keyboard::isKeyPressed(Keyboard::Right);
+            this->world->set_moving(player_is_running);
+            this->world->update(delta_time);
+            // this->coin->update(delta_time);
+            for (auto &coin : coins)
+            {
+                coin.update(delta_time, player_is_running);
+            }
+            // if (removed_coin)
+            // {
+            //     coins.push_back(*removed_coin);
+            //     delete removed_coin; // Clean up temporary storage
+            //     removed_coin = nullptr;
+            // }
+            this->player->update(delta_time);
+            point_text.setString("Points: " + std::to_string(points));
         }
-
-        // for (int i = 0; i < possible_collisions.size();)
-        // {
-        //     bool coin_removed=false;
-        //     for (auto it = coins.begin(); it !=coins.end(); it++)
-        //     {
-        //         if (player->getSprite().getGlobalBounds().intersects(it->getSprite().getGlobalBounds()))
-        //         {
-        //             points+=10;
-        //             removed_coin=new Coin(it->getSprite().getPosition(),120.f);
-        //             coins.erase(it);
-        //             coin_removed=true;
-        //             break;
-        //         }
-
-        //     }
-        //     if (!coin_removed)
-        //     {
-        //         i++;
-        //     }
-
-        // }
-
-        bool player_is_running = Keyboard::isKeyPressed(Keyboard::Left) || Keyboard::isKeyPressed(Keyboard::Right);
-        this->world->set_moving(player_is_running);
-        this->world->update(delta_time);
-        // this->coin->update(delta_time);
-        for (auto &coin : coins)
-        {
-            coin.update(delta_time, player_is_running);
-        }
-        // if (removed_coin)
-        // {
-        //     coins.push_back(*removed_coin);
-        //     delete removed_coin; // Clean up temporary storage
-        //     removed_coin = nullptr;
-        // }
-        this->player->update(delta_time);
-        point_text.setString("Points: " + std::to_string(points));
     }
 
     void render_gui()
@@ -534,15 +712,26 @@ public:
 
     void render()
     {
-        this->world->render(*this->window);
-        for (auto &coin : coins)
+        this->window->clear();
+        if (state == NAME_INPUT)
         {
-            coin.render(window);
+            this->menu->render_input_screen(*window);
         }
-        this->player->render(this->window);
-        this->render_gui();
+        else if (state == MENU)
+        {
+            this->menu->render_welcome_screeen(*window);
+        }
+        else if (state == PLAY)
+        {
+            this->world->render(*this->window);
+            for (auto &coin : coins)
+            {
+                coin.render(window);
+            }
+            this->player->render(this->window);
+            this->render_gui();
+        }
         // coins.push_back(*removed_coin);
-
     }
 
     void run()
