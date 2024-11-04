@@ -458,6 +458,9 @@ class Coin
     float frame_speed;
     float animation_time;
     float speed;
+    float disappeear_time;
+    bool is_visible;
+    Clock visibility_timer;
 
 public:
     Coin(Vector2f start_pos, float speed)
@@ -478,67 +481,92 @@ public:
         this->current_frame = 0;
         this->frame_speed = 0.1f;
         this->animation_time = 0.0f;
-        // this->speed = speed;
-        // this->is_moving_up = move_up;
+        this->is_visible = true;
+        this->disappeear_time = 5.0f;
     }
     Sprite getSprite()
     {
         return this->sprite;
     }
+
+    void update_visibility()
+    {
+        if (!is_visible && visibility_timer.getElapsedTime().asSeconds() > disappeear_time)
+        {
+            is_visible = true;
+        }
+    }
     void update(float delta_time, bool player_running)
     {
-        animation_time += delta_time;
-        if (animation_time >= frame_speed)
+        if (is_visible)
         {
-            current_frame = (current_frame + 1) % 9;
-            switch (current_frame)
+            animation_time += delta_time;
+            if (animation_time >= frame_speed)
             {
-            case 0:
-                this->sprite.setTexture(texture1);
-                break;
-            case 1:
-                this->sprite.setTexture(texture2);
-                break;
-            case 2:
-                this->sprite.setTexture(texture3);
-                break;
-            case 3:
-                this->sprite.setTexture(texture4);
-                break;
-            case 4:
-                this->sprite.setTexture(texture5);
-                break;
-            case 5:
-                this->sprite.setTexture(texture6);
-                break;
-            case 6:
-                this->sprite.setTexture(texture7);
-                break;
-            case 7:
-                this->sprite.setTexture(texture8);
-                break;
-            case 8:
-                this->sprite.setTexture(texture9);
-                break;
-            default:
-                break;
+                current_frame = (current_frame + 1) % 9;
+                switch (current_frame)
+                {
+                case 0:
+                    this->sprite.setTexture(texture1);
+                    break;
+                case 1:
+                    this->sprite.setTexture(texture2);
+                    break;
+                case 2:
+                    this->sprite.setTexture(texture3);
+                    break;
+                case 3:
+                    this->sprite.setTexture(texture4);
+                    break;
+                case 4:
+                    this->sprite.setTexture(texture5);
+                    break;
+                case 5:
+                    this->sprite.setTexture(texture6);
+                    break;
+                case 6:
+                    this->sprite.setTexture(texture7);
+                    break;
+                case 7:
+                    this->sprite.setTexture(texture8);
+                    break;
+                case 8:
+                    this->sprite.setTexture(texture9);
+                    break;
+                default:
+                    break;
+                }
+                animation_time = 0.0f;
             }
-            animation_time = 0.0f;
-        }
-        if (player_running)
-        {
-            sprite.move(-speed * delta_time, 0.f);
+            if (player_running)
+            {
+                sprite.move(-speed * delta_time, 0.f);
 
-            // // Check if the coin goes off-screen and reposition it (wrap around)
-            if (sprite.getPosition().x + sprite.getGlobalBounds().width < 0)
-            {
-                sprite.setPosition(800, sprite.getPosition().y); // Reposition to the right edge
+                // // Check if the coin goes off-screen 
+                if (sprite.getPosition().x + sprite.getGlobalBounds().width < 0)
+                {
+                    sprite.setPosition(800, sprite.getPosition().y);  //reset it to right edge
+                }
             }
         }
+        update_visibility();
+    }
+
+    bool return_visibility()
+    {
+        return is_visible;
+    }
+    void disappear_coin()
+    {
+        is_visible=false;
+        visibility_timer.restart();
     }
     void render(RenderWindow *window)
     {
-        window->draw(this->sprite);
+        if (is_visible)
+        {
+            window->draw(this->sprite);
+        }
     }
 };
 
@@ -562,8 +590,6 @@ class Game
     Text point_text;
     int points;
 
-    Coin *removed_coin;
-
     Menu *menu;
     Game_state state;
 
@@ -574,7 +600,6 @@ public:
         this->world = new main_world(window->getSize(), 200.f);
         this->player = new PLayer();
         this->quad_tree = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
-        this->removed_coin = nullptr;
         this->menu = new Menu();
         this->state = NAME_INPUT;
         coins.push_back(Coin({200.f, 10.f}, 120.f));  // Coin in the upper line
@@ -614,7 +639,7 @@ public:
                 {
                     if (this->menu->is_Mouse_hover(*window))
                     {
-                        this->state=MENU;
+                        this->state = MENU;
                     }
                 }
 
@@ -624,7 +649,7 @@ public:
                 {
                     if (this->menu->is_Mouse_hover(*window))
                     {
-                        this->state=PLAY;
+                        this->state = PLAY;
                     }
                 }
                 break;
@@ -641,65 +666,32 @@ public:
             quad_tree->clear();
             for (auto &coin : coins)
             {
-                quad_tree->insert(coin.getSprite());
+                if(coin.return_visibility()) quad_tree->insert(coin.getSprite());
             }
             vector<Sprite> possible_collisions;
-            // Coin *removed_coin = nullptr;
             quad_tree->retrieve(possible_collisions, player->getSprite().getGlobalBounds());
             for (auto it = possible_collisions.begin(); it != possible_collisions.end(); it++)
             {
                 if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
                 {
                     points += 10;
-                    removed_coin = new Coin(it->getPosition(), 120.f);
                     auto coin_it = std::find_if(coins.begin(), coins.end(),
                                                 [&](Coin &coin)
                                                 { return coin.getSprite().getPosition() == it->getPosition(); });
                     if (coin_it != coins.end())
                     {
-                        removed_coin = new Coin(coin_it->getSprite().getPosition(), 120.f);
-                        coins.erase(coin_it); // Remove it from the main vector
+                        coin_it->disappear_coin();
                     }
                     break;
                 }
             }
-
-            // for (int i = 0; i < possible_collisions.size();)
-            // {
-            //     bool coin_removed=false;
-            //     for (auto it = coins.begin(); it !=coins.end(); it++)
-            //     {
-            //         if (player->getSprite().getGlobalBounds().intersects(it->getSprite().getGlobalBounds()))
-            //         {
-            //             points+=10;
-            //             removed_coin=new Coin(it->getSprite().getPosition(),120.f);
-            //             coins.erase(it);
-            //             coin_removed=true;
-            //             break;
-            //         }
-
-            //     }
-            //     if (!coin_removed)
-            //     {
-            //         i++;
-            //     }
-
-            // }
-
             bool player_is_running = Keyboard::isKeyPressed(Keyboard::Left) || Keyboard::isKeyPressed(Keyboard::Right);
             this->world->set_moving(player_is_running);
             this->world->update(delta_time);
-            // this->coin->update(delta_time);
             for (auto &coin : coins)
             {
                 coin.update(delta_time, player_is_running);
             }
-            // if (removed_coin)
-            // {
-            //     coins.push_back(*removed_coin);
-            //     delete removed_coin; // Clean up temporary storage
-            //     removed_coin = nullptr;
-            // }
             this->player->update(delta_time);
             point_text.setString("Points: " + std::to_string(points));
         }
@@ -731,7 +723,6 @@ public:
             this->player->render(this->window);
             this->render_gui();
         }
-        // coins.push_back(*removed_coin);
     }
 
     void run()
