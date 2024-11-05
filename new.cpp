@@ -482,7 +482,7 @@ public:
         this->frame_speed = 0.1f;
         this->animation_time = 0.0f;
         this->is_visible = true;
-        this->disappeear_time = 5.0f;
+        this->disappeear_time = 8.0f;
     }
     Sprite getSprite()
     {
@@ -570,10 +570,136 @@ public:
     }
 };
 
-class Enemy
+class Bullet
 {
     Sprite sprite;
     Texture texture;
+    Vector2f direction;
+    float movement_speed;
+    void init_texture()
+    {
+        if(!this->texture.loadFromFile("shoot.png"))
+        {
+            cout<<"COULDN'T OPEN THE IMAGE"<<endl;
+        };
+    }
+    public:
+    Bullet(float pos_x,float dx,float pos_y,float dy,float movement)
+    {
+        this->init_texture();
+        this->sprite.setTexture(this->texture);
+        this->sprite.setScale(0.6f,0.6f);
+        this->sprite.setPosition(pos_x,pos_y);
+        this->direction.x=dx;
+        this->direction.y=dy;
+        this->movement_speed=movement;
+        cout << "Bullet created at position (" << pos_x << ", " << pos_y << ")" << endl;
+    }
+
+    FloatRect getbounds()const
+    {
+        return this->sprite.getGlobalBounds();
+    }
+
+    void update()
+    {
+        this->sprite.move(this->movement_speed*direction);
+    }
+
+    void render(RenderWindow &target)
+    {
+        target.draw(this->sprite);
+    }
+
+};
+
+class Enemy
+{
+    Sprite sprite;
+    Texture texture101,texture102,texture103,texture104,texture201,texture202,texture203,texture204;
+    Vector2f position;
+    int points;
+    float speed;
+    float animation_time;
+    int current_frame;
+    public:
+    Enemy(Vector2f start__pos)
+    {
+        this->texture101.loadFromFile("robo.png");
+        this->texture102.loadFromFile("robo2.png");
+        this->texture103.loadFromFile("robo3.png");
+        this->texture104.loadFromFile("robo4.png");
+        this->texture201.loadFromFile("robo.png");
+        this->texture202.loadFromFile("robo2.png");
+        this->texture203.loadFromFile("robo3.png");
+        this->texture204.loadFromFile("robo4.png");
+        this->animation_time=0.0f;
+        this->position=start__pos;
+        this->current_frame=0;
+        int type=rand()%2;
+        switch (type)
+        {
+        case 0:
+            sprite.setTexture(this->texture101);
+            this->speed=10.f;
+            this->points=10;
+            break;
+        case 1:
+           sprite.setTexture(this->texture201);
+           this->speed=20.f;
+           this->points=20;
+           break;
+        default:
+            break;
+        }
+        sprite.setPosition(position);
+    }
+    
+    void update_animation(float delta_time,Texture& texture101,Texture& texture102,Texture& texture103,Texture& texture104)
+    {
+        animation_time+=delta_time;
+        if (animation_time>0.1f)
+        {
+            current_frame=(current_frame+1)%4;
+            if (current_frame==0)
+            {
+                this->sprite.setTexture(texture101);
+            }
+            else if(current_frame==2)
+            {
+                this->sprite.setTexture(texture102);
+            }
+            else if(current_frame==3)
+            {
+                this->sprite.setTexture(texture103);
+            }
+            else if(current_frame==4)
+            {
+                this->sprite.setTexture(texture104);
+            }
+            this->animation_time=0.0f;
+        }
+    }
+    Sprite getSprite()
+    {
+        return this->sprite;
+    }
+    void update(float delta_time)
+    {
+        if (this->points==10)
+        {
+            update_animation(delta_time,texture101,texture102,texture103,texture104);
+        }
+        else if(this->points==20)
+        {
+            update_animation(delta_time,texture201,texture202,texture203,texture204);
+        }
+        sprite.move(-speed*delta_time,0);
+    }
+    void render(RenderWindow& window)
+    {
+        window.draw(this->sprite);
+    }
 };
 
 class Game
@@ -586,12 +712,19 @@ class Game
     Event ev;
     Quad_Tree *quad_tree;
 
+    vector<Bullet*>bullets;
+
+
     Font font;
     Text point_text;
     int points;
 
     Menu *menu;
     Game_state state;
+
+    vector<Enemy*>enemies;
+    float spawn_timer_max;
+    float spawn_timer;
 
 public:
     Game()
@@ -606,16 +739,18 @@ public:
         coins.push_back(Coin({250.f, 10.f}, 120.f));  // Coin in the upper line
         coins.push_back(Coin({300.f, 10.f}, 120.f));  // Coin in the upper line
         coins.push_back(Coin({350.f, 10.f}, 120.f));  // Coin in the middle line
-        coins.push_back(Coin({700.f, 530.f}, 120.f)); // Coin in the lower line
-        coins.push_back(Coin({750.f, 530.f}, 120.f)); // Coin in the lower line
-        coins.push_back(Coin({650.f, 530.f}, 120.f)); // Coin in the lower line
-        coins.push_back(Coin({790.f, 530.f}, 120.f)); // Coin in the lower line
+        coins.push_back(Coin({700.f, 530.f}, 100.f)); // Coin in the lower line
+        coins.push_back(Coin({750.f, 530.f}, 100.f)); // Coin in the lower line
+        coins.push_back(Coin({650.f, 530.f}, 100.f)); // Coin in the lower line
+        coins.push_back(Coin({790.f, 530.f}, 100.f)); // Coin in the lower line
         this->font.loadFromFile("ARCADE.TTF");
         this->point_text.setFont(this->font);
         this->point_text.setFillColor(Color::White);
         this->point_text.setPosition(600.f, 25.f);
         this->point_text.setCharacterSize(28);
         this->points = 0;
+        this->spawn_timer=0.f;
+        this->spawn_timer_max=10000.f;
     }
 
     void poll_events()
@@ -653,14 +788,32 @@ public:
                     }
                 }
                 break;
+            case PLAY:
+                if (ev.type==Event::KeyPressed && ev.key.code==Keyboard::Space)
+                {
+                    this->bullets.push_back(new Bullet(this->player->getSprite().getPosition().x+this->player->getSprite().getGlobalBounds().width/2.f,
+                1.f,this->player->getSprite().getPosition().y,0.f,5.f));
+                }
+                break;
+                
             default:
                 break;
             }
         }
     }
 
+    void spawn_enemies()
+    {
+        this->spawn_timer+=1.0f;
+        if (this->spawn_timer>=this->spawn_timer_max)
+        {
+            enemies.push_back(new Enemy({this->player->getSprite().getPosition().x+rand()%400,player->getSprite().getPosition().y+20.f}));
+        this->spawn_timer=0.f;
+        }
+    }
     void update(float delta_time)
     {
+        this->spawn_enemies();
         if (state == PLAY)
         {
             quad_tree->clear();
@@ -668,8 +821,15 @@ public:
             {
                 if(coin.return_visibility()) quad_tree->insert(coin.getSprite());
             }
+            for(auto &enemy:enemies)
+            {
+                quad_tree->insert(enemy->getSprite());
+            }
+            
             vector<Sprite> possible_collisions;
+            vector<Sprite>possible_collisions_with_enemies;
             quad_tree->retrieve(possible_collisions, player->getSprite().getGlobalBounds());
+            quad_tree->retrieve(possible_collisions_with_enemies, player->getSprite().getGlobalBounds());
             for (auto it = possible_collisions.begin(); it != possible_collisions.end(); it++)
             {
                 if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
@@ -685,13 +845,33 @@ public:
                     break;
                 }
             }
+            for (auto it = possible_collisions_with_enemies.begin(); it !=possible_collisions_with_enemies.end(); it++)
+            {
+                if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
+                {
+                    // points-=10;
+                    auto enemy_it=std::find_if(enemies.begin(),enemies.end(),[&](Enemy *enemy){return enemy->getSprite().getPosition()==it->getPosition();});
+                    if (enemy_it!=enemies.end())
+                    {
+                        enemies.erase(enemy_it);
+                    }
+                    break;
+                }
+                
+            }
+            
             bool player_is_running = Keyboard::isKeyPressed(Keyboard::Left) || Keyboard::isKeyPressed(Keyboard::Right);
             this->world->set_moving(player_is_running);
             this->world->update(delta_time);
+            for (auto &enemy:enemies)
+            {
+                enemy->update(delta_time);
+            }
             for (auto &coin : coins)
             {
                 coin.update(delta_time, player_is_running);
             }
+            
             this->player->update(delta_time);
             point_text.setString("Points: " + std::to_string(points));
         }
@@ -716,10 +896,15 @@ public:
         else if (state == PLAY)
         {
             this->world->render(*this->window);
+            for (int i = 0; i < enemies.size(); i++)
+            {
+                enemies[i]->render(*window);
+            }
             for (auto &coin : coins)
             {
                 coin.render(window);
             }
+            
             this->player->render(this->window);
             this->render_gui();
         }
@@ -743,5 +928,5 @@ int main()
     Game game;
     game.run();
 
-    return 0;
+    return 0; 
 }
