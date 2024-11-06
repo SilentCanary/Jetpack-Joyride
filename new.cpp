@@ -8,7 +8,8 @@ enum Game_state
 {
     NAME_INPUT,
     MENU,
-    PLAY
+    PLAY,
+    GAME_OVER
 };
 
 class Menu
@@ -328,7 +329,7 @@ public:
 class PLayer
 {
     Sprite sprite;
-    Texture texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8;
+    Texture texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, shooting_texture;
     int current_frame;
     float animation_time;
     float frame_speed;
@@ -338,6 +339,7 @@ class PLayer
     bool is_flying;
     float gravity;
     float ground_y;
+    bool shooting;
 
 public:
     PLayer()
@@ -350,6 +352,7 @@ public:
         this->texture6.loadFromFile("jet2.png");
         this->texture7.loadFromFile("jet3.png");
         this->texture8.loadFromFile("jet4.png");
+        this->shooting_texture.loadFromFile("shooter3.png");
         this->num_of_frames = 4;
         this->animation_time = 0.0f;
         this->frame_speed = 0.1f;
@@ -361,6 +364,7 @@ public:
         is_running = false;
         this->is_flying = false;
         this->ground_y = 500.f;
+        shooting = false;
     }
 
     Sprite getSprite()
@@ -370,6 +374,12 @@ public:
 
     void update(float deltaTime)
     {
+        if (Keyboard::isKeyPressed(Keyboard::Space))
+        {
+            shooting = true;
+        }
+        else
+            shooting = false;
         if (Keyboard::isKeyPressed(Keyboard::Up))
         {
             is_flying = true;
@@ -394,6 +404,11 @@ public:
             this->sprite.setPosition(this->sprite.getPosition().x, 0);
             velocity.y = 0; // Stop further upward movement
         }
+        if (shooting)
+        {
+            sprite.setTexture(this->shooting_texture);
+        }
+
         if (is_flying)
         {
             animation_time += deltaTime;
@@ -409,7 +424,7 @@ public:
                 animation_time = 0.0f;
             }
         }
-        if (!is_flying)
+        if (!is_flying && !shooting)
         {
             if (Keyboard::isKeyPressed(Keyboard::Left) || Keyboard::isKeyPressed(Keyboard::Right))
             {
@@ -461,6 +476,7 @@ class Coin
     float disappeear_time;
     bool is_visible;
     Clock visibility_timer;
+    Vector2f initial_position;
 
 public:
     Coin(Vector2f start_pos, float speed)
@@ -474,6 +490,9 @@ public:
         this->texture7.loadFromFile("coin8 (2).png");
         this->texture8.loadFromFile("coin9 (2).png");
         this->texture9.loadFromFile("coin10 (2).png");
+        this->initial_position=start_pos;
+        cout<<"coin construct"<<endl;
+        cout<<"initial position : "<<initial_position.x<<" "<<initial_position.y<<endl;
         this->speed = speed;
         this->sprite.setTexture(this->texture1);
         this->sprite.setPosition(start_pos);
@@ -483,6 +502,14 @@ public:
         this->animation_time = 0.0f;
         this->is_visible = true;
         this->disappeear_time = 8.0f;
+    }
+    void set_position()
+    {
+        this->sprite.setPosition(this->initial_position);
+    }
+    Vector2f get_initial_pos()
+    {
+        return this->initial_position;
     }
     Sprite getSprite()
     {
@@ -542,10 +569,10 @@ public:
             {
                 sprite.move(-speed * delta_time, 0.f);
 
-                // // Check if the coin goes off-screen 
+                // // Check if the coin goes off-screen
                 if (sprite.getPosition().x + sprite.getGlobalBounds().width < 0)
                 {
-                    sprite.setPosition(800, sprite.getPosition().y);  //reset it to right edge
+                    sprite.setPosition(800, sprite.getPosition().y); // reset it to right edge
                 }
             }
         }
@@ -558,8 +585,9 @@ public:
     }
     void disappear_coin()
     {
-        is_visible=false;
+        is_visible = false;
         visibility_timer.restart();
+
     }
     void render(RenderWindow *window)
     {
@@ -576,53 +604,59 @@ class Bullet
     Texture texture;
     Vector2f direction;
     float movement_speed;
+
     void init_texture()
     {
-        if(!this->texture.loadFromFile("shoot.png"))
+        if (!this->texture.loadFromFile("shoot.png"))
         {
-            cout<<"COULDN'T OPEN THE IMAGE"<<endl;
+            cout << "COULDN'T OPEN THE IMAGE" << endl;
         };
     }
-    public:
-    Bullet(float pos_x,float dx,float pos_y,float dy,float movement)
+
+public:
+    Sprite getSprite()
+    {
+        return this->sprite;
+    }
+    Bullet(float pos_x, float dx, float pos_y, float dy, float movement)
     {
         this->init_texture();
         this->sprite.setTexture(this->texture);
-        this->sprite.setScale(0.6f,0.6f);
-        this->sprite.setPosition(pos_x,pos_y);
-        this->direction.x=dx;
-        this->direction.y=dy;
-        this->movement_speed=movement;
+        // this->sprite.setScale(0.6f,0.6f);
+        this->sprite.setPosition(pos_x, pos_y);
+        this->direction.x = dx;
+        this->direction.y = dy;
+        this->movement_speed = movement;
         cout << "Bullet created at position (" << pos_x << ", " << pos_y << ")" << endl;
     }
 
-    FloatRect getbounds()const
+    FloatRect getbounds() const
     {
         return this->sprite.getGlobalBounds();
     }
 
     void update()
     {
-        this->sprite.move(this->movement_speed*direction);
+        this->sprite.move(this->movement_speed * direction);
     }
 
     void render(RenderWindow &target)
     {
         target.draw(this->sprite);
     }
-
 };
 
 class Enemy
 {
     Sprite sprite;
-    Texture texture101,texture102,texture103,texture104,texture201,texture202,texture203,texture204;
+    Texture texture101, texture102, texture103, texture104, texture201, texture202, texture203, texture204;
     Vector2f position;
     int points;
     float speed;
     float animation_time;
     int current_frame;
-    public:
+
+public:
     Enemy(Vector2f start__pos)
     {
         this->texture101.loadFromFile("robo.png");
@@ -633,51 +667,51 @@ class Enemy
         this->texture202.loadFromFile("robo2.png");
         this->texture203.loadFromFile("robo3.png");
         this->texture204.loadFromFile("robo4.png");
-        this->animation_time=0.0f;
-        this->position=start__pos;
-        this->current_frame=0;
-        int type=rand()%2;
+        this->animation_time = 0.0f;
+        this->position = start__pos;
+        this->current_frame = 0;
+        int type = rand() % 2;
         switch (type)
         {
         case 0:
             sprite.setTexture(this->texture101);
-            this->speed=10.f;
-            this->points=10;
+            this->speed = 100.f;
+            this->points = 10;
             break;
         case 1:
-           sprite.setTexture(this->texture201);
-           this->speed=20.f;
-           this->points=20;
-           break;
+            sprite.setTexture(this->texture201);
+            this->speed = 100.f;
+            this->points = 20;
+            break;
         default:
             break;
         }
         sprite.setPosition(position);
     }
-    
-    void update_animation(float delta_time,Texture& texture101,Texture& texture102,Texture& texture103,Texture& texture104)
+
+    void update_animation(float delta_time, Texture &texture101, Texture &texture102, Texture &texture103, Texture &texture104)
     {
-        animation_time+=delta_time;
-        if (animation_time>0.1f)
+        animation_time += delta_time;
+        if (animation_time > 0.1f)
         {
-            current_frame=(current_frame+1)%4;
-            if (current_frame==0)
+            current_frame = (current_frame + 1) % 4;
+            if (current_frame == 0)
             {
                 this->sprite.setTexture(texture101);
             }
-            else if(current_frame==2)
+            else if (current_frame == 2)
             {
                 this->sprite.setTexture(texture102);
             }
-            else if(current_frame==3)
+            else if (current_frame == 3)
             {
                 this->sprite.setTexture(texture103);
             }
-            else if(current_frame==4)
+            else if (current_frame == 4)
             {
                 this->sprite.setTexture(texture104);
             }
-            this->animation_time=0.0f;
+            this->animation_time = 0.0f;
         }
     }
     Sprite getSprite()
@@ -686,17 +720,17 @@ class Enemy
     }
     void update(float delta_time)
     {
-        if (this->points==10)
+        if (this->points == 10)
         {
-            update_animation(delta_time,texture101,texture102,texture103,texture104);
+            update_animation(delta_time, texture101, texture102, texture103, texture104);
         }
-        else if(this->points==20)
+        else if (this->points == 20)
         {
-            update_animation(delta_time,texture201,texture202,texture203,texture204);
+            update_animation(delta_time, texture201, texture202, texture203, texture204);
         }
-        sprite.move(-speed*delta_time,0);
+        sprite.move(-speed * delta_time, 0);
     }
-    void render(RenderWindow& window)
+    void render(RenderWindow &window)
     {
         window.draw(this->sprite);
     }
@@ -710,21 +744,35 @@ class Game
     Clock clock;
     main_world *world;
     Event ev;
-    Quad_Tree *quad_tree;
+    Quad_Tree *quad_tree_coins;
+    Quad_Tree *quad_tree_enemies;
+    Quad_Tree *quad_tree_bullets;
 
-    vector<Bullet*>bullets;
-
+    vector<Bullet *> bullets;
 
     Font font;
     Text point_text;
     int points;
 
+    int hp;
+    int hp_max;
+    RectangleShape hp_bar;
+    RectangleShape hp_bar_back;
     Menu *menu;
     Game_state state;
 
-    vector<Enemy*>enemies;
+    vector<Enemy *> enemies;
     float spawn_timer_max;
     float spawn_timer;
+
+    void init_hp_bar()
+    {
+        this->hp_bar.setSize(Vector2f(200.f, 25.f));
+        this->hp_bar.setFillColor(Color::Blue);
+        this->hp_bar.setPosition(Vector2f(20.f, 20.f));
+        this->hp_bar_back = this->hp_bar;
+        this->hp_bar_back.setFillColor(Color(25, 25, 25, 200));
+    }
 
 public:
     Game()
@@ -732,13 +780,20 @@ public:
         this->window = new RenderWindow(VideoMode(800, 700), "jetpack joyride");
         this->world = new main_world(window->getSize(), 200.f);
         this->player = new PLayer();
-        this->quad_tree = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
+        this->quad_tree_coins = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
+        this->quad_tree_enemies = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
+        this->quad_tree_bullets = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
         this->menu = new Menu();
         this->state = NAME_INPUT;
         coins.push_back(Coin({200.f, 10.f}, 120.f));  // Coin in the upper line
         coins.push_back(Coin({250.f, 10.f}, 120.f));  // Coin in the upper line
         coins.push_back(Coin({300.f, 10.f}, 120.f));  // Coin in the upper line
         coins.push_back(Coin({350.f, 10.f}, 120.f));  // Coin in the middle line
+        coins.push_back(Coin({350.f, 250.f}, 120.f)); // Coin in the middle line
+        coins.push_back(Coin({350.f, 300.f}, 120.f)); // Coin in the middle line
+        coins.push_back(Coin({400.f, 250.f}, 120.f)); // Coin in the middle line
+        coins.push_back(Coin({400.f, 300.f}, 120.f)); // Coin in the middle line
+        coins.push_back(Coin({350.f, 350.f}, 120.f)); // Coin in the middle line
         coins.push_back(Coin({700.f, 530.f}, 100.f)); // Coin in the lower line
         coins.push_back(Coin({750.f, 530.f}, 100.f)); // Coin in the lower line
         coins.push_back(Coin({650.f, 530.f}, 100.f)); // Coin in the lower line
@@ -749,10 +804,23 @@ public:
         this->point_text.setPosition(600.f, 25.f);
         this->point_text.setCharacterSize(28);
         this->points = 0;
-        this->spawn_timer=0.f;
-        this->spawn_timer_max=10000.f;
+        this->spawn_timer = 0.f;
+        this->spawn_timer_max = 5000.f;
+        this->hp = 50;
+        this->hp_max = 50;
+        this->init_hp_bar();
     }
 
+   
+    void replace_coins(Coin& coin)
+    {
+        // coin.getSprite().setPosition(coin.get_initial_pos());
+        coin.set_position();
+        cout<<"inside replace coim"<<endl;
+        cout<<coin.getSprite().getPosition().x<<endl;
+        cout<<coin.get_initial_pos().x<<endl;
+    }
+   
     void poll_events()
     {
 
@@ -789,13 +857,13 @@ public:
                 }
                 break;
             case PLAY:
-                if (ev.type==Event::KeyPressed && ev.key.code==Keyboard::Space)
+                if (ev.type == Event::KeyPressed && ev.key.code == Keyboard::Space)
                 {
-                    this->bullets.push_back(new Bullet(this->player->getSprite().getPosition().x+this->player->getSprite().getGlobalBounds().width/2.f,
-                1.f,this->player->getSprite().getPosition().y,0.f,5.f));
+                    this->bullets.push_back(new Bullet(this->player->getSprite().getPosition().x + this->player->getSprite().getGlobalBounds().width / 2.f,
+                                                       1.f, this->player->getSprite().getPosition().y + 10, 0.f, 0.5f));
                 }
                 break;
-                
+
             default:
                 break;
             }
@@ -804,66 +872,159 @@ public:
 
     void spawn_enemies()
     {
-        this->spawn_timer+=1.0f;
-        if (this->spawn_timer>=this->spawn_timer_max)
+        this->spawn_timer += 2.0f;
+        if (this->spawn_timer >= this->spawn_timer_max)
         {
-            enemies.push_back(new Enemy({this->player->getSprite().getPosition().x+rand()%400,player->getSprite().getPosition().y+20.f}));
-        this->spawn_timer=0.f;
+            enemies.push_back(new Enemy({this->player->getSprite().getPosition().x +100.f +rand() % 200, player->getSprite().getPosition().y + 20.f}));
+            this->spawn_timer = 0.f;
         }
     }
-    void update(float delta_time)
+    
+    void update_bullets()
     {
-        this->spawn_enemies();
-        if (state == PLAY)
+        int count = 0;
+        for (int i = 0; i < bullets.size(); i++)
         {
-            quad_tree->clear();
-            for (auto &coin : coins)
+            bullets[i]->update();
+            if (bullets[i]->getbounds().top + bullets[i]->getbounds().width > 800.f)
             {
-                if(coin.return_visibility()) quad_tree->insert(coin.getSprite());
+                delete this->bullets[i];
+                this->bullets.erase(this->bullets.begin() + i);
             }
-            for(auto &enemy:enemies)
+        }
+    }
+
+    void update_gui()
+    {
+        float hp_percent = static_cast<float>(this->hp) / static_cast<float>(this->hp_max);
+        hp_bar.setSize({200.f * hp_percent, hp_bar.getSize().y});
+    }
+
+    void update_coins(vector<Sprite> &possible_collisions)
+    {
+        for (auto it = possible_collisions.begin(); it != possible_collisions.end(); it++)
+        {
+            cout<<"----------\n\n";
+            if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
             {
-                quad_tree->insert(enemy->getSprite());
-            }
-            
-            vector<Sprite> possible_collisions;
-            vector<Sprite>possible_collisions_with_enemies;
-            quad_tree->retrieve(possible_collisions, player->getSprite().getGlobalBounds());
-            quad_tree->retrieve(possible_collisions_with_enemies, player->getSprite().getGlobalBounds());
-            for (auto it = possible_collisions.begin(); it != possible_collisions.end(); it++)
-            {
-                if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
+                this->points += 10;
+                cout<<"poins scored"<<endl;
+                auto coin_it = std::find_if(coins.begin(), coins.end(),
+                                            [&](Coin &coin)
+                                            { return coin.getSprite().getPosition() == it->getPosition(); });
+                if (coin_it != coins.end())
                 {
-                    points += 10;
-                    auto coin_it = std::find_if(coins.begin(), coins.end(),
-                                                [&](Coin &coin)
-                                                { return coin.getSprite().getPosition() == it->getPosition(); });
-                    if (coin_it != coins.end())
-                    {
-                        coin_it->disappear_coin();
-                    }
-                    break;
+                    coin_it->disappear_coin();
+                    this->replace_coins(*coin_it);
                 }
+                cout<<"Visibility: "<<coin_it->return_visibility()<<" "<<it->getPosition().x<<endl;
+                break;
             }
-            for (auto it = possible_collisions_with_enemies.begin(); it !=possible_collisions_with_enemies.end(); it++)
+        }
+    }
+
+    void update_enemies(vector<Sprite> &possible_collisions_with_enemies)
+    {
+        for (auto it = possible_collisions_with_enemies.begin(); it != possible_collisions_with_enemies.end(); it++)
+        {
+            if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
             {
-                if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
+                // cout<<"0player collided with enemy!!!"<<endl;
+                // cout<<"player position :"<<player->getSprite().getPosition().x<<" "<<player->getSprite().getPosition().y<<endl;
+                // points-=10;
+                hp -= 10;
+                auto enemy_it = std::find_if(enemies.begin(), enemies.end(), [&](Enemy *enemy)
+                                             { return enemy->getSprite().getPosition() == it->getPosition(); });
+                // cout<<"enemy position :"<<it->getPosition().x<<" "<<it->getPosition().y<<endl;
+                //     cout<<"enemies size"<<enemies.size();
+                if (enemy_it != enemies.end())
                 {
-                    // points-=10;
-                    auto enemy_it=std::find_if(enemies.begin(),enemies.end(),[&](Enemy *enemy){return enemy->getSprite().getPosition()==it->getPosition();});
-                    if (enemy_it!=enemies.end())
+                    enemies.erase(enemy_it);
+                }
+                   
+                break;
+            }
+        }
+    }
+
+    void collision_with_bullet(vector<Sprite> &possible_collisions_with_bullets)
+    {
+        for (auto &bullet : bullets)
+        {
+            for (auto it = possible_collisions_with_bullets.begin(); it != possible_collisions_with_bullets.end(); ++it)
+            {
+                if (bullet->getbounds().intersects(it->getGlobalBounds()))
+                {
+                    // Find and erase enemy
+                 
+                    auto enemy_it = std::find_if(enemies.begin(), enemies.end(),
+                                                 [&](Enemy *enemy)
+                                                 { return enemy->getSprite().getPosition() == it->getPosition(); });
+                    if (enemy_it != enemies.end())
                     {
                         enemies.erase(enemy_it);
                     }
+
+                    // Erase bullet
+                    auto bullet_it = std::find(bullets.begin(), bullets.end(), bullet);
+                    if (bullet_it != bullets.end())
+                    {
+                        delete *bullet_it;
+                        bullets.erase(bullet_it);
+                    }
+
                     break;
                 }
-                
             }
+        }
+    }
+    
+    void update(float delta_time)
+    {
+        if (state == PLAY)
+        {
+            this->spawn_enemies();
+            this->update_bullets();
             
+        //------------------------QUAD TREE-------------------------------
+            //clearing quad tree for next frame
+            quad_tree_coins->clear();
+            quad_tree_bullets->clear();
+            quad_tree_enemies->clear();
+
+            //insert the objects into quad tree , created separate objects of quad tree for coins and enemies 
+            for (auto &coin : coins)
+            {
+                if (coin.return_visibility())
+                    quad_tree_coins->insert(coin.getSprite());
+            }
+            for (auto &enemy : enemies)
+            {
+                quad_tree_enemies->insert(enemy->getSprite());
+            }
+            vector<Sprite> possible_collisions;
+            vector<Sprite> possible_collisions_with_enemies;
+            vector<Sprite> possible_collisions_with_bullets;
+
+            //retreival----------------
+            quad_tree_coins->retrieve(possible_collisions, player->getSprite().getGlobalBounds());
+            quad_tree_enemies->retrieve(possible_collisions_with_enemies, player->getSprite().getGlobalBounds());
+            for (auto &bullet : bullets)
+            {
+                quad_tree_enemies->retrieve(possible_collisions_with_bullets, bullet->getSprite().getGlobalBounds());
+            }
+            //----------------------------------------------------------------------------------------------
+            
+            
+            this->update_coins(possible_collisions);
+            this->update_enemies(possible_collisions_with_enemies);
+            this->collision_with_bullet(possible_collisions_with_bullets);
+           
             bool player_is_running = Keyboard::isKeyPressed(Keyboard::Left) || Keyboard::isKeyPressed(Keyboard::Right);
             this->world->set_moving(player_is_running);
             this->world->update(delta_time);
-            for (auto &enemy:enemies)
+            
+            for (auto &enemy : enemies)
             {
                 enemy->update(delta_time);
             }
@@ -871,15 +1032,20 @@ public:
             {
                 coin.update(delta_time, player_is_running);
             }
-            
+
             this->player->update(delta_time);
+            
+            this->update_gui();
             point_text.setString("Points: " + std::to_string(points));
+
         }
     }
 
     void render_gui()
     {
         this->window->draw(this->point_text);
+        this->window->draw(this->hp_bar_back);
+        this->window->draw(this->hp_bar);
     }
 
     void render()
@@ -896,15 +1062,19 @@ public:
         else if (state == PLAY)
         {
             this->world->render(*this->window);
-            for (int i = 0; i < enemies.size(); i++)
-            {
-                enemies[i]->render(*window);
-            }
             for (auto &coin : coins)
             {
                 coin.render(window);
             }
-            
+            for (int i = 0; i < bullets.size(); i++)
+            {
+                bullets[i]->render(*window);
+            }
+            for (int i = 0; i < enemies.size(); i++)
+            {
+                enemies[i]->render(*window);
+            }
+
             this->player->render(this->window);
             this->render_gui();
         }
@@ -928,5 +1098,5 @@ int main()
     Game game;
     game.run();
 
-    return 0; 
+    return 0;
 }
