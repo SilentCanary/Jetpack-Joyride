@@ -1,6 +1,8 @@
 #include <iostream>
 #include <SFML/Graphics.hpp>
 #include <sstream>
+#include <queue>
+#include <fstream>
 using namespace std;
 using namespace sf;
 
@@ -9,7 +11,113 @@ enum Game_state
     NAME_INPUT,
     MENU,
     PLAY,
-    GAME_OVER
+    GAME_OVER,
+    LEADERBOARD
+};
+
+struct Node
+{
+    Node *left;
+    Node *right;
+    int score;
+    string player_name;
+    Node(int s, string name) : left(nullptr), right(nullptr), score(s), player_name(name) {}
+};
+
+class BST
+{
+    Node *parent;
+
+    Node *insert_node(Node *node, int score, string name)
+    {
+        if (!node)
+            return new Node(score, name);
+
+        if (name == node->player_name)
+        {
+            node->score = max(node->score, score);
+        }
+        else if (score < node->score)
+        {
+            node->left = insert_node(node->left, score, name);
+        }
+        else if (score > node->score)
+        {
+            node->right = insert_node(node->right, score, name);
+        }
+        return node;
+    }
+    void inorder_traversal(Node *root, vector<pair<int, string>> &scores)
+    {
+        if (root)
+        {
+            inorder_traversal(root->right, scores);
+            scores.push_back({root->score, root->player_name});
+            inorder_traversal(root->left, scores);
+        }
+    }
+    void clear(Node *root)
+    {
+        if (root)
+        {
+            clear(root->left);
+            clear(root->right);
+            delete root;
+        }
+    }
+
+public:
+    BST() : parent(nullptr) {}
+
+    void insert(int score, string name)
+    {
+        parent = this->insert_node(parent, score, name);
+    }
+    vector<pair<int, string>> get_scores()
+    {
+        vector<pair<int, string>> SCORES;
+        this->inorder_traversal(parent, SCORES);
+        return SCORES;
+    }
+    ~BST()
+    {
+        this->clear(this->parent);
+    }
+};
+
+
+class SaveFile
+{
+    fstream savefile;
+
+public:
+    void save_file(vector<pair<int, string>> &scores)
+    {
+        savefile.open("LEADERBOARD.txt", ios::out);
+        if (savefile.is_open())
+        {
+            for (const auto &score : scores)
+            {
+                savefile << score.second << " " << score.first << endl;
+                cout << score.second << " " << score.first << endl;
+            }
+            savefile.close();
+        }
+    }
+    void loadFile(BST &leaderboard)
+    {
+        savefile.open("LEADERBOARD.txt", ios::in);
+        if (savefile.is_open())
+        {
+            string name;
+            int score;
+            while (savefile >> name >> score)
+            {
+                leaderboard.insert(score, name);
+            }
+            savefile.close();
+        }
+    }
 };
 
 class Menu
@@ -27,6 +135,24 @@ class Menu
     CircleShape go_button;
     ConvexShape arrow;
 
+    RectangleShape button;
+    Text leaderboard_button_text;
+    void init_button()
+    {
+        this->leaderboard_button_text.setFont(this->font);
+        this->leaderboard_button_text.setFillColor(Color::White);
+        this->leaderboard_button_text.setCharacterSize(40);
+        this->leaderboard_button_text.setPosition(150.f, 400.f);
+        this->leaderboard_button_text.setString("LEADERBOARD");
+        FloatRect getbounds = leaderboard_button_text.getGlobalBounds();
+
+        this->button.setSize(Vector2f(getbounds.width + 20.f, getbounds.height + 10.f));
+        this->button.setFillColor(Color(25, 25, 25, 200));
+        this->button.setOutlineColor(Color::White);
+        this->button.setOutlineThickness(1.f);
+        this->button.setPosition(this->leaderboard_button_text.getPosition().x - 10.f,
+                                 this->leaderboard_button_text.getPosition().y + 8.f);
+    }
     void init_go_button()
     {
         go_button.setRadius(20.f);
@@ -75,8 +201,14 @@ public:
     Menu()
     {
         this->init_gui();
+        this->init_button();
         this->init_go_button();
         this->init_text_box();
+    }
+
+    string getName()
+    {
+        return name;
     }
 
     void handle_event(Event ev, RenderWindow &window)
@@ -108,6 +240,12 @@ public:
         }
     }
 
+    bool is_Mouse_hover_leaderboardbutton(RenderWindow &window)
+    {
+        Vector2i mouse_pos = Mouse::getPosition(window);
+        FloatRect getbounds = button.getGlobalBounds();
+        return getbounds.contains(static_cast<Vector2f>(mouse_pos));
+    }
     bool is_Mouse_hover(RenderWindow &window)
     {
         Vector2i mouse_pos = Mouse::getPosition(window);
@@ -127,6 +265,17 @@ public:
         }
     }
 
+    void update_color_leader(RenderWindow &window)
+    {
+        if (is_Mouse_hover_leaderboardbutton(window))
+        {
+            button.setFillColor(Color(50, 50, 50, 200));
+        }
+        else
+        {
+            button.setFillColor(Color(25, 25, 25, 200));
+        }
+    }
     void render_input_screen(RenderWindow &window)
     {
         window.draw(this->background);
@@ -146,6 +295,15 @@ public:
         window.draw(this->title_text);
         window.draw(this->go_button);
         window.draw(this->arrow);
+    }
+    void render_game_over_screen(RenderWindow &window)
+    {
+        window.draw(this->background);
+        this->title_text.setString("GAME OVER");
+        update_color_leader(window);
+        window.draw(this->title_text);
+        window.draw(this->button);
+        window.draw(this->leaderboard_button_text);
     }
 };
 
@@ -329,7 +487,7 @@ public:
 class PLayer
 {
     Sprite sprite;
-    Texture texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, shooting_texture;
+    Texture texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, shooting_texture, lil_stomper1, lil_stomper2, lil_stomper_3;
     int current_frame;
     float animation_time;
     float frame_speed;
@@ -340,6 +498,7 @@ class PLayer
     float gravity;
     float ground_y;
     bool shooting;
+    bool power_up;
 
 public:
     PLayer()
@@ -353,6 +512,9 @@ public:
         this->texture7.loadFromFile("jet3.png");
         this->texture8.loadFromFile("jet4.png");
         this->shooting_texture.loadFromFile("shooter3.png");
+        this->lil_stomper1.loadFromFile("lil.png");
+        this->lil_stomper2.loadFromFile("lil_stomper2.png");
+        this->lil_stomper_3.loadFromFile("lil_stomper3.png");
         this->num_of_frames = 4;
         this->animation_time = 0.0f;
         this->frame_speed = 0.1f;
@@ -365,8 +527,16 @@ public:
         this->is_flying = false;
         this->ground_y = 500.f;
         shooting = false;
+        this->power_up = false;
     }
 
+    void activate_power_up(int ch)
+    {
+        if (ch)
+            this->power_up = true;
+        else
+            this->power_up = false;
+    }
     Sprite getSprite()
     {
         return this->sprite;
@@ -374,6 +544,7 @@ public:
 
     void update(float deltaTime)
     {
+
         if (Keyboard::isKeyPressed(Keyboard::Space))
         {
             shooting = true;
@@ -404,13 +575,36 @@ public:
             this->sprite.setPosition(this->sprite.getPosition().x, 0);
             velocity.y = 0; // Stop further upward movement
         }
-        if (shooting)
+        if (power_up)
+        {
+            sprite.setTexture(this->lil_stomper1);
+            sprite.setScale({2.f, 2.f});
+            animation_time += deltaTime;
+            if (animation_time > 1.5f)
+            {
+                current_frame = (current_frame + 1) % 2;
+                if (current_frame == 0)
+                    this->sprite.setTexture(this->lil_stomper1);
+                else if (current_frame == 1)
+                {
+                    this->sprite.setTexture(this->lil_stomper2);
+                }
+                animation_time = 0.f;
+            }
+        }
+        if (power_up && is_flying)
+        {
+            sprite.setTexture(this->lil_stomper_3);
+        }
+
+        if (shooting && !power_up)
         {
             sprite.setTexture(this->shooting_texture);
         }
 
-        if (is_flying)
+        if (is_flying && !power_up)
         {
+            sprite.setScale({1.f, 1.f});
             animation_time += deltaTime;
             if (animation_time > frame_speed)
             {
@@ -424,8 +618,9 @@ public:
                 animation_time = 0.0f;
             }
         }
-        if (!is_flying && !shooting)
+        if (!is_flying && !shooting && !power_up)
         {
+            sprite.setScale({1.f, 1.f});
             if (Keyboard::isKeyPressed(Keyboard::Left) || Keyboard::isKeyPressed(Keyboard::Right))
             {
                 is_running = true;
@@ -479,6 +674,7 @@ class Coin
     Vector2f initial_position;
 
 public:
+    int points;
     Coin(Vector2f start_pos, float speed)
     {
         this->texture1.loadFromFile("coin1.png");
@@ -490,9 +686,7 @@ public:
         this->texture7.loadFromFile("coin8 (2).png");
         this->texture8.loadFromFile("coin9 (2).png");
         this->texture9.loadFromFile("coin10 (2).png");
-        this->initial_position=start_pos;
-        cout<<"coin construct"<<endl;
-        cout<<"initial position : "<<initial_position.x<<" "<<initial_position.y<<endl;
+        this->initial_position = start_pos;
         this->speed = speed;
         this->sprite.setTexture(this->texture1);
         this->sprite.setPosition(start_pos);
@@ -502,11 +696,13 @@ public:
         this->animation_time = 0.0f;
         this->is_visible = true;
         this->disappeear_time = 8.0f;
+        this->points = 10;
     }
     void set_position()
     {
         this->sprite.setPosition(this->initial_position);
     }
+
     Vector2f get_initial_pos()
     {
         return this->initial_position;
@@ -514,6 +710,14 @@ public:
     Sprite getSprite()
     {
         return this->sprite;
+    }
+
+    void set_points(int multiplier, int ch)
+    {
+        if (ch)
+            this->points = this->points * multiplier;
+        else
+            this->points = this->points / multiplier;
     }
 
     void update_visibility()
@@ -587,7 +791,6 @@ public:
     {
         is_visible = false;
         visibility_timer.restart();
-
     }
     void render(RenderWindow *window)
     {
@@ -627,7 +830,6 @@ public:
         this->direction.x = dx;
         this->direction.y = dy;
         this->movement_speed = movement;
-        cout << "Bullet created at position (" << pos_x << ", " << pos_y << ")" << endl;
     }
 
     FloatRect getbounds() const
@@ -736,6 +938,77 @@ public:
     }
 };
 
+class power_ups
+{
+public:
+    float duration;
+    string type;
+    Sprite sprite;
+    Texture coin_textrue, lil_stomp_texture;
+    void init_gui()
+    {
+        if (!this->coin_textrue.loadFromFile("power1.png"))
+        {
+            cout << "couldnt load image" << endl;
+        }
+        this->lil_stomp_texture.loadFromFile("power2.png");
+    }
+    virtual void update()
+    {
+        this->sprite.move(-0.2f, 0);
+    }
+    virtual void render(RenderWindow &window)
+    {
+        window.draw(this->sprite);
+    }
+    Sprite getSprite()
+    {
+        return this->sprite;
+    }
+};
+
+class coin_2x : public power_ups
+{
+public:
+    coin_2x(Vector2f position)
+    {
+        this->init_gui();
+        this->sprite.setTexture(this->coin_textrue);
+        this->sprite.setPosition(position);
+        type = "coin_booster";
+        duration = 10.f;
+    }
+    void apply_effect(Coin *coin)
+    {
+        coin->set_points(2, 1);
+    }
+    void remove_effect(Coin *coin)
+    {
+        coin->set_points(2, 0);
+    }
+};
+
+class lil_stomper : public power_ups
+{
+public:
+    lil_stomper(Vector2f position)
+    {
+        this->init_gui();
+        duration = 15.f;
+        type = "lil_stomper";
+        this->sprite.setTexture(this->lil_stomp_texture);
+        this->sprite.setPosition(position);
+    }
+    void apply_effect(PLayer *player)
+    {
+        player->activate_power_up(1);
+    }
+    void remove_effect(PLayer *player)
+    {
+        player->activate_power_up(0);
+    }
+};
+
 class Game
 {
     RenderWindow *window;
@@ -747,7 +1020,7 @@ class Game
     Quad_Tree *quad_tree_coins;
     Quad_Tree *quad_tree_enemies;
     Quad_Tree *quad_tree_bullets;
-
+    Quad_Tree *quad_tree_powerups;
     vector<Bullet *> bullets;
 
     Font font;
@@ -765,6 +1038,60 @@ class Game
     float spawn_timer_max;
     float spawn_timer;
 
+    queue<power_ups *> active_powerups;
+    bool is_power_Active;
+    float powerup_spawn_timer;
+    float powerup_spawn_timer_max;
+    float activation_time;
+    vector<power_ups *> powers;
+    power_ups *cur_power;
+    bool islilstmp_active;
+
+    BST leaderboard;
+    SaveFile file;
+    Sprite background;
+    Texture background_texture;
+    void spawn_powerups()
+    {
+        powerup_spawn_timer += 1.f;
+        if (powerup_spawn_timer >= powerup_spawn_timer_max)
+        {
+
+            int random_index = rand() % 2;
+            powerup_spawn_timer = 0.f;
+            if (random_index == 1)
+            {
+                powers.push_back(new coin_2x(Vector2f(this->player->getSprite().getPosition().x + 200.f + rand() % 200, player->getSprite().getPosition().y - 200.f - rand() % 250)));
+            }
+            else
+            {
+                powers.push_back(new lil_stomper(Vector2f(this->player->getSprite().getPosition().x + 200.f + rand() % 200, player->getSprite().getPosition().y - 200.f - rand() % 250)));
+            }
+        }
+    }
+
+    void render_leaderboard()
+    {
+        this->window->draw(this->background);
+        Text title("Leaderboard", this->font, 50);
+        title.setFillColor(Color::White);
+        title.setPosition(200.f, 200.f);
+        this->window->draw(title);
+        vector<pair<int, string>> scores = this->leaderboard.get_scores();
+        float y_position = 350.f;
+
+        for (const auto &score : scores)
+        {
+            Text scoreText;
+            scoreText.setFont(this->font);
+            scoreText.setCharacterSize(30);
+            scoreText.setFillColor(Color::White);
+            scoreText.setString(score.second + " : " + to_string(score.first));
+            scoreText.setPosition(100.f, y_position);
+            this->window->draw(scoreText);
+            y_position += 40.f;
+        }
+    }
     void init_hp_bar()
     {
         this->hp_bar.setSize(Vector2f(200.f, 25.f));
@@ -783,8 +1110,17 @@ public:
         this->quad_tree_coins = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
         this->quad_tree_enemies = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
         this->quad_tree_bullets = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
+        this->quad_tree_powerups = new Quad_Tree(0, FloatRect(0.f, 0.f, window->getSize().x, window->getSize().y));
         this->menu = new Menu();
         this->state = NAME_INPUT;
+        this->activation_time = 0.f;
+        this->powerup_spawn_timer = 0.f;
+        this->powerup_spawn_timer_max = 5000.f;
+        this->cur_power = nullptr;
+        this->islilstmp_active = false;
+        this->is_power_Active = false;
+        this->background_texture.loadFromFile("C:/Users/sairam/Documents/data structures/graph/Texture/space3.jpeg");
+        this->background.setTexture(this->background_texture);
         coins.push_back(Coin({200.f, 10.f}, 120.f));  // Coin in the upper line
         coins.push_back(Coin({250.f, 10.f}, 120.f));  // Coin in the upper line
         coins.push_back(Coin({300.f, 10.f}, 120.f));  // Coin in the upper line
@@ -809,18 +1145,14 @@ public:
         this->hp = 50;
         this->hp_max = 50;
         this->init_hp_bar();
+        this->file.loadFile(leaderboard);
     }
 
-   
-    void replace_coins(Coin& coin)
+    void replace_coins(Coin &coin)
     {
-        // coin.getSprite().setPosition(coin.get_initial_pos());
         coin.set_position();
-        cout<<"inside replace coim"<<endl;
-        cout<<coin.getSprite().getPosition().x<<endl;
-        cout<<coin.get_initial_pos().x<<endl;
     }
-   
+
     void poll_events()
     {
 
@@ -863,7 +1195,15 @@ public:
                                                        1.f, this->player->getSprite().getPosition().y + 10, 0.f, 0.5f));
                 }
                 break;
-
+            case GAME_OVER:
+                if (ev.type == Event::MouseButtonPressed && this->ev.mouseButton.button == Mouse::Left)
+                {
+                    if (this->menu->is_Mouse_hover_leaderboardbutton(*window))
+                    {
+                        this->state = LEADERBOARD;
+                    }
+                }
+                break;
             default:
                 break;
             }
@@ -875,18 +1215,17 @@ public:
         this->spawn_timer += 2.0f;
         if (this->spawn_timer >= this->spawn_timer_max)
         {
-            enemies.push_back(new Enemy({this->player->getSprite().getPosition().x +100.f +rand() % 200, player->getSprite().getPosition().y + 20.f}));
+            enemies.push_back(new Enemy({this->player->getSprite().getPosition().x + 100.f + rand() % 200, player->getSprite().getPosition().y + 20.f}));
             this->spawn_timer = 0.f;
         }
     }
-    
+
     void update_bullets()
     {
-        int count = 0;
         for (int i = 0; i < bullets.size(); i++)
         {
             bullets[i]->update();
-            if (bullets[i]->getbounds().top + bullets[i]->getbounds().width > 800.f)
+            if (bullets[i]->getbounds().left + bullets[i]->getbounds().width > 800.f)
             {
                 delete this->bullets[i];
                 this->bullets.erase(this->bullets.begin() + i);
@@ -904,20 +1243,17 @@ public:
     {
         for (auto it = possible_collisions.begin(); it != possible_collisions.end(); it++)
         {
-            cout<<"----------\n\n";
             if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
             {
-                this->points += 10;
-                cout<<"poins scored"<<endl;
                 auto coin_it = std::find_if(coins.begin(), coins.end(),
                                             [&](Coin &coin)
                                             { return coin.getSprite().getPosition() == it->getPosition(); });
+                this->points += coin_it->points;
                 if (coin_it != coins.end())
                 {
                     coin_it->disappear_coin();
                     this->replace_coins(*coin_it);
                 }
-                cout<<"Visibility: "<<coin_it->return_visibility()<<" "<<it->getPosition().x<<endl;
                 break;
             }
         }
@@ -929,21 +1265,110 @@ public:
         {
             if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
             {
-                // cout<<"0player collided with enemy!!!"<<endl;
-                // cout<<"player position :"<<player->getSprite().getPosition().x<<" "<<player->getSprite().getPosition().y<<endl;
-                // points-=10;
-                hp -= 10;
+
+                if (!islilstmp_active)
+                    hp -= 10;
                 auto enemy_it = std::find_if(enemies.begin(), enemies.end(), [&](Enemy *enemy)
                                              { return enemy->getSprite().getPosition() == it->getPosition(); });
-                // cout<<"enemy position :"<<it->getPosition().x<<" "<<it->getPosition().y<<endl;
-                //     cout<<"enemies size"<<enemies.size();
                 if (enemy_it != enemies.end())
                 {
                     enemies.erase(enemy_it);
                 }
-                   
+
                 break;
             }
+        }
+    }
+
+    void update_powerups()
+    {
+        for (auto &power : powers)
+        {
+            power->update();
+            if (power->sprite.getGlobalBounds().left < 0.f)
+            {
+                powers.erase(find(powers.begin(), powers.end(), power));
+            }
+        }
+    }
+
+    void render_powerups(RenderWindow &window)
+    {
+        for (auto &power : powers)
+        {
+            power->render(window);
+        }
+    }
+
+    void update_powers(vector<Sprite> &possible_collisions_with_powers)
+    {
+        for (auto it = possible_collisions_with_powers.begin(); it != possible_collisions_with_powers.end(); it++)
+        {
+            if (player->getSprite().getGlobalBounds().intersects(it->getGlobalBounds()))
+            {
+                auto power_it = find_if(powers.begin(), powers.end(), [&](power_ups *power)
+                                        { return power->getSprite().getPosition() == it->getPosition(); });
+                active_powerups.push(*power_it);
+                powers.erase(power_it);
+                break;
+            }
+        }
+        queue_handler();
+    }
+
+    void queue_handler()
+    {
+        if (!active_powerups.empty() && !is_power_Active)
+        {
+            is_power_Active = true;
+            cur_power = active_powerups.front();
+            active_powerups.pop();
+        }
+        if (cur_power)
+        {
+            activate_power_ups(cur_power);
+        }
+    }
+
+    void activate_power_ups(power_ups *power)
+    {
+        if (activation_time == 0.f)
+        {
+            if (lil_stomper *stompPower = dynamic_cast<lil_stomper *>(power))
+            {
+                stompPower->apply_effect(player);
+                this->islilstmp_active = true;
+                cout << "Activated lil stomp   booster effect" << endl;
+            }
+            else if (coin_2x *coinPower = dynamic_cast<coin_2x *>(power))
+            {
+                for (auto &coin : coins)
+                {
+                    coinPower->apply_effect(&coin);
+                    cout << "Activated coin booster effect" << endl;
+                }
+            }
+        }
+        activation_time += 0.0005f;
+        if (activation_time >= power->duration)
+        {
+            is_power_Active = false;
+            activation_time = 0.f;
+            if (coin_2x *coin_power = dynamic_cast<coin_2x *>(power))
+            {
+                for (auto &coin : coins)
+                {
+                    coin_power->remove_effect(&coin);
+                    cout << "removed coin booster effect" << endl;
+                }
+            }
+            else if (lil_stomper *stompPower = dynamic_cast<lil_stomper *>(power))
+            {
+                stompPower->remove_effect(player);
+                this->islilstmp_active = false;
+                cout << "removed lil stomper effect" << endl;
+            }
+            cur_power = nullptr;
         }
     }
 
@@ -955,8 +1380,6 @@ public:
             {
                 if (bullet->getbounds().intersects(it->getGlobalBounds()))
                 {
-                    // Find and erase enemy
-                 
                     auto enemy_it = std::find_if(enemies.begin(), enemies.end(),
                                                  [&](Enemy *enemy)
                                                  { return enemy->getSprite().getPosition() == it->getPosition(); });
@@ -965,7 +1388,6 @@ public:
                         enemies.erase(enemy_it);
                     }
 
-                    // Erase bullet
                     auto bullet_it = std::find(bullets.begin(), bullets.end(), bullet);
                     if (bullet_it != bullets.end())
                     {
@@ -978,21 +1400,22 @@ public:
             }
         }
     }
-    
+
     void update(float delta_time)
     {
         if (state == PLAY)
         {
             this->spawn_enemies();
+            this->spawn_powerups();
             this->update_bullets();
-            
-        //------------------------QUAD TREE-------------------------------
-            //clearing quad tree for next frame
+
+            //------------------------QUAD TREE-------------------------------
+            // clearing quad tree for next frame
             quad_tree_coins->clear();
             quad_tree_bullets->clear();
             quad_tree_enemies->clear();
-
-            //insert the objects into quad tree , created separate objects of quad tree for coins and enemies 
+            quad_tree_powerups->clear();
+            // insert the objects into quad tree , created separate objects of quad tree for coins and enemies
             for (auto &coin : coins)
             {
                 if (coin.return_visibility())
@@ -1002,42 +1425,64 @@ public:
             {
                 quad_tree_enemies->insert(enemy->getSprite());
             }
+            for (auto &power : powers)
+            {
+                quad_tree_powerups->insert(power->sprite);
+            }
+
             vector<Sprite> possible_collisions;
             vector<Sprite> possible_collisions_with_enemies;
             vector<Sprite> possible_collisions_with_bullets;
+            vector<Sprite> possible_collisions_with_powerups;
 
-            //retreival----------------
+            // retreival----------------
             quad_tree_coins->retrieve(possible_collisions, player->getSprite().getGlobalBounds());
             quad_tree_enemies->retrieve(possible_collisions_with_enemies, player->getSprite().getGlobalBounds());
             for (auto &bullet : bullets)
             {
                 quad_tree_enemies->retrieve(possible_collisions_with_bullets, bullet->getSprite().getGlobalBounds());
             }
+            for (auto &power : powers)
+            {
+                quad_tree_powerups->retrieve(possible_collisions_with_powerups, player->getSprite().getGlobalBounds());
+            }
             //----------------------------------------------------------------------------------------------
-            
-            
+
             this->update_coins(possible_collisions);
+            this->update_powers(possible_collisions_with_powerups);
             this->update_enemies(possible_collisions_with_enemies);
             this->collision_with_bullet(possible_collisions_with_bullets);
-           
+
             bool player_is_running = Keyboard::isKeyPressed(Keyboard::Left) || Keyboard::isKeyPressed(Keyboard::Right);
             this->world->set_moving(player_is_running);
             this->world->update(delta_time);
-            
-            for (auto &enemy : enemies)
+
+            for (int i = 0; i < enemies.size(); i++)
             {
-                enemy->update(delta_time);
+                enemies[i]->update(delta_time);
+                if (enemies[i]->getSprite().getGlobalBounds().left < 0.f)
+                {
+                    delete this->enemies[i];
+                    this->enemies.erase(this->enemies.begin() + i);
+                }
             }
+            this->update_powerups();
+
             for (auto &coin : coins)
             {
                 coin.update(delta_time, player_is_running);
             }
 
             this->player->update(delta_time);
-            
+            if (this->hp <= 0)
+            {
+                this->state = GAME_OVER;
+                leaderboard.insert(this->points, menu->getName());
+                vector<pair<int, string>> scores = leaderboard.get_scores();
+                file.save_file(scores);
+            }
             this->update_gui();
             point_text.setString("Points: " + std::to_string(points));
-
         }
     }
 
@@ -1066,6 +1511,7 @@ public:
             {
                 coin.render(window);
             }
+            this->render_powerups(*window);
             for (int i = 0; i < bullets.size(); i++)
             {
                 bullets[i]->render(*window);
@@ -1077,6 +1523,14 @@ public:
 
             this->player->render(this->window);
             this->render_gui();
+        }
+        else if (state == GAME_OVER)
+        {
+            menu->render_game_over_screen(*window);
+        }
+        else if (state == LEADERBOARD)
+        {
+            this->render_leaderboard();
         }
     }
 
