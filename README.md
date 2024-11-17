@@ -1,5 +1,7 @@
 # Jetpack-Joyride
 This is a pure C++ game application that uses SFML for the graphics and user interaction. It uses **Quad Tree** for efficient collision detection by spatially partitioning game objects, a **queue** to manage power-ups and their activation sequence, and a **BST** to maintain the leaderboard efficiently.
+A glimpse of the game:-
+![image](https://github.com/user-attachments/assets/b2f8a8ae-b9af-4713-bd1e-9ed5d4732351)
 
 ### Key Features  
 - **Efficient Collision Detection:**  
